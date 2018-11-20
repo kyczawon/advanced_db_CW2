@@ -9,7 +9,7 @@ using namespace std;
 template <size_t N, typename T> ostream& operator<<(ostream& o, BTree<N, T> const& v);
 
 template <size_t NodeSize> void testBTreeWithNodeSize() {
-	(cout << "Node size " << NodeSize).flush();
+	(cout << "Node size " << NodeSize << endl).flush();
 	BTree<NodeSize> b(400L);
 
 	long input[1024];
@@ -24,6 +24,7 @@ template <size_t NodeSize> void testBTreeWithNodeSize() {
 	std::shuffle(begin(input), end(input), g);
 	for(auto& it : input) {
 		b.insert(it);
+		cout << b << endl;
 		if(b.count(it) != 1) {
 			stringstream error;
 			error << it << " got lost in tree: " << b << endl;

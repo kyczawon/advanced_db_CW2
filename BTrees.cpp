@@ -12,7 +12,8 @@ using namespace std;
  *
  * T is the type of the held value
  */
-template <size_t NodeSize, typename T> struct BTreeNode {
+template <size_t NodeSize, typename T>
+struct BTreeNode {
 	/**
 	 * An element in the node consisting of a pivot and the subtree to its left
 	 */
@@ -62,6 +63,42 @@ template <size_t NodeSize, typename T> struct BTreeNode {
 	 * feel free to ignore it and implement your own structure
 	 */
 	NewSplit splitNode(T first, BTreeNode<NodeSize, T>* newChild) {
+		size_t pivotsNum = NodeSize - 1;
+		size_t medianIndex = pivotsNum/2;
+		T median = pivots[medianIndex].pivot.value();
+		T leftMedian = pivots[medianIndex - 1].pivot.value();
+		T rightMedian = pivots[medianIndex + 1].pivot.value();
+		//default values to insert and split on
+		T splitVal = median;
+		bool insertInFirst = true;
+
+		// no empty slots in children so a split is needed
+		BTreeNode<NodeSize, T>* sibling = new BTreeNode<NodeSize, T>{};
+		
+		//odd number of pivots
+		if (pivotsNum %2 != 0) {
+			if (first < median) {
+				//move points after and including the median to the sibling node
+				for (int j = 0; j <= medianIndex; j++) {
+					sibling->pivots[j].pivot = newChild->pivots[j+medianIndex].pivot;
+					newChild->pivots[j+medianIndex].pivot.reset();
+				}
+				mergeValueIntoNode(first, this, true);
+				T splitVal = newChild->pivots[medianIndex].pivot.value();
+				newChild->pivots[medianIndex].pivot.reset();
+				return NewSplit{splitVal, sibling};
+			} else {
+				//move points after the median to the sibling node
+				for (int j = 1; j <= medianIndex; j++) {
+					sibling->pivots[j-1].pivot = newChild->pivots[j+medianIndex].pivot;
+					newChild->pivots[j+medianIndex].pivot.reset();
+				}
+				mergeValueIntoNode(first, sibling, true);
+				T splitVal = newChild->pivots[medianIndex].pivot.value();
+				newChild->pivots[medianIndex].pivot.reset();
+				return NewSplit{splitVal, sibling};
+			}
+		}
 		// you may or may not implement this function
 		return {};
 	}
@@ -71,7 +108,17 @@ template <size_t NodeSize, typename T> struct BTreeNode {
 	 * feel free to ignore it and implement your own structure
 	 */
 	NewSplit mergeValueIntoNode(T first, BTreeNode<NodeSize, T>* second, bool isLeaf = false) {
-		// you may or may not implement this function
+		int i = NodeSize - 2;
+		//find the filled slot
+		while (!second->pivots[i-1].pivot.has_value()) {
+			i--;
+		}
+		//keep shifting the pivots until wee can place v in
+		while (i>0 && second->pivots[i-1].pivot.value() > first) {
+			second->pivots[i].pivot = second->pivots[i-1].pivot.value();
+			i--;
+		}
+		second->pivots[i].pivot = first;
 		return {};
 	}
 
@@ -82,7 +129,50 @@ template <size_t NodeSize, typename T> struct BTreeNode {
 	 *
 	 * If the node was split, returns a new pivot and a new right child
 	 */
-	NewSplit insert(T v) { return {}; }
+
+	NewSplit insert(T v) {
+		size_t pivotsNum = NodeSize - 1;
+		int i = 0;
+		//iterate through all pivots until we reach a leaf node
+		while (pivots[i].pivot < v && i < pivotsNum) {
+			i++;
+		}
+
+		if (pivots[i].childToLeft) {
+			NewSplit newNode = pivots[i].childToLeft->insert(v);
+			//if there is a the child has overflown
+			if (newNode.childToTheRightOfPivot) {
+
+			}
+		} else if (i < pivotsNum && pivots[i+1].childToLeft) {
+			NewSplit newNode = pivots[i+1].childToLeft->insert(v);
+			//if there is a the child has overflown
+			if (newNode.childToTheRightOfPivot) {
+
+			}
+		}
+
+		//we are in a leaf node
+		if (!pivots[0].childToLeft) {
+			//the leaf node is full
+			if (pivots[pivotsNum-1].pivot.has_value()) {
+				return splitNode(v, this);
+			} else {
+				mergeValueIntoNode(v, this, true);
+			}
+		}
+
+		return {};
+		
+	}
+
+	//used for debugging
+	void printNode() {
+		for (int k = 0; k < NodeSize - 1; k++) {
+				cout << pivots[k].pivot.value_or(-1) << ",";
+			}
+			cout << endl;
+	}
 
 	/**
 	 * Count the number of occurences of the value v
@@ -92,7 +182,35 @@ template <size_t NodeSize, typename T> struct BTreeNode {
 	 * You can assume uniqueness of the values v, thus this function
 	 * returns either 0 of 1
 	 */
-	size_t count(T v) { return {}; }
+
+	size_t count(T v) {
+
+        return counterRecursive(v, this);
+    }
+
+    size_t counterRecursive(T v, BTreeNode<NodeSize, T> *BTNode) {
+
+        int i = 0;
+        while (i < NodeSize - 2 && v > BTNode->pivots[i].pivot && BTNode->pivots[i].pivot.has_value()) {
+            i++;
+        }
+
+        if (BTNode->pivots[i].pivot == v) {
+            return 1;
+        } else if (v > BTNode->pivots[i].pivot) {
+            if (BTNode->rightMost) {
+                return counterRecursive(v, BTNode->rightMost);
+            } else if (BTNode->pivots[i].childToLeft) {
+                return counterRecursive(v, BTNode->pivots[i].childToLeft);
+            } else {
+				return 0;
+			}
+        } else if (BTNode->pivots[i].childToLeft == nullptr) {
+            return 0;
+        } else {
+            return counterRecursive(v, BTNode->pivots[i].childToLeft);
+        }
+    }
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -101,7 +219,8 @@ template <size_t NodeSize, typename T> struct BTreeNode {
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-template <size_t NodeSize, typename T> void BTree<NodeSize, T>::insert(T v) {
+template <size_t NodeSize, typename T>
+void BTree<NodeSize, T>::insert(T v) {
 	auto newNode = root->insert(v);
 	auto oldRoot = root;
 	if(newNode.childToTheRightOfPivot) {
@@ -113,8 +232,7 @@ template <size_t NodeSize, typename T> void BTree<NodeSize, T>::insert(T v) {
 }
 
 template <size_t NodeSize, typename T>
-BTree<NodeSize, T>::BTree(T v)
-		: root(new BTreeNode<NodeSize, T>) {
+BTree<NodeSize, T>::BTree(T v) : root(new BTreeNode<NodeSize, T>) {
 	root->pivots[0].pivot = v;
 }
 
